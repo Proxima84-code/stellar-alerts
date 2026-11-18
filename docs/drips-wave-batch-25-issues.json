@@ -1,0 +1,666 @@
+[
+  {
+    "id": 101,
+    "title": "[FEAT]: Soroban Smart Contract Event Topic & Signature Hash Filtering Engine",
+    "category": "Soroban",
+    "milestone": "Milestone 3 – Reliability",
+    "complexity": "High",
+    "estimatedPoints": 200,
+    "labels": ["soroban", "backend", "feature", "drips-wave", "points: 200"],
+    "summary": "Decode Soroban contract event topics and match them dynamically against registered user event topic rules.",
+    "background": "Currently, the watcher only monitors standard payment operations and basic SAC transfer events. Custom decentralized apps (e.g., Soroban DEXs, lending protocols, escrow contracts) emit custom event topics encoded in Soroban SCVal XDR.",
+    "problemStatement": "Users and dApp developers cannot subscribe to specific contract method events (e.g. swap, deposit, stake, liquidate) without deep XDR topic decoding.",
+    "proposedSolution": "Build a Soroban topic decoder in apps/api/src/lib/soroban/topic-filter.ts that decodes ScVal XDR symbols and vectors into human-readable topics and evaluates user topic regex/exact match alert rules.",
+    "filesLikelyAffected": [
+      "apps/api/src/lib/soroban/topic-filter.ts",
+      "apps/api/src/modules/alerts/rules/soroban-topic.rule.ts"
+    ],
+    "acceptanceCriteria": [
+      "Accurately decodes ScVal Symbol and Vec event topics from Soroban RPC getEvents response",
+      "Matches topic patterns against active AlertRule topic filters with zero false positives",
+      "Passes decoded payload in alert notification delivery metadata"
+    ],
+    "testingRequirements": [
+      "Unit test XDR topic parsing with mock ScVal envelopes",
+      "Verify rule evaluator triggers alert dispatch on matching topic"
+    ]
+  },
+  {
+    "id": 102,
+    "title": "[SEC]: Mutual TLS (mTLS) Client Certificate Authentication for Enterprise Webhook Egress",
+    "category": "Security",
+    "milestone": "Milestone 2 – Security",
+    "complexity": "High",
+    "estimatedPoints": 200,
+    "labels": ["security", "webhooks", "backend", "drips-wave", "points: 200"],
+    "summary": "Support enterprise webhook destinations requiring mTLS client certificates for bidirectional TLS authentication.",
+    "background": "High-security institutional users and fintechs require mutual TLS (mTLS) to verify that webhook calls originate strictly from Stellar Alerts infrastructure before processing on internal networks.",
+    "problemStatement": "Standard HTTPS webhooks only authenticate the server to the client. Institutions cannot restrict ingress to specific certified clients without mTLS.",
+    "proposedSolution": "Add encrypted client certificate storage in database (AES-256-GCM) and configure the HTTP delivery dispatcher to attach client certificates and keys to outbound Axios/fetch https.Agent requests.",
+    "filesLikelyAffected": [
+      "apps/api/src/modules/webhooks/mtls-transport.ts",
+      "apps/api/src/modules/webhooks/webhook.service.ts"
+    ],
+    "acceptanceCriteria": [
+      "Stores user-provided client certificates and private keys encrypted at rest",
+      "Delivers webhook payloads over https with mutual TLS certificate negotiation",
+      "Logs TLS handshake verification failures with descriptive errors without leaking private keys"
+    ],
+    "testingRequirements": [
+      "Integration test with local mTLS server fixture using self-signed CA certs",
+      "Verify rejection when invalid or untrusted client cert is presented"
+    ]
+  },
+  {
+    "id": 103,
+    "title": "[RELIABILITY]: Distributed Circuit Breaker with Redis State for Flapping Webhook Endpoints",
+    "category": "Reliability",
+    "milestone": "Milestone 3 – Reliability",
+    "complexity": "High",
+    "estimatedPoints": 200,
+    "labels": ["reliability", "webhooks", "redis", "queue", "drips-wave", "points: 200"],
+    "summary": "Implement an automated circuit breaker (CLOSED, OPEN, HALF-OPEN) in Redis to protect BullMQ workers from flapping or permanently failing webhook targets.",
+    "background": "When a user's webhook destination goes down, BullMQ workers spend significant resources retrying and waiting on connection timeouts, starving other healthy notifications.",
+    "problemStatement": "Repeated timeouts against offline endpoints degrade overall dispatch queue throughput and inflate Redis queue depth.",
+    "proposedSolution": "Build a Redis-backed Circuit Breaker state machine (apps/api/src/modules/alerts/circuit-breaker.ts) that trips to OPEN after 5 consecutive 5xx errors or timeouts within a 60-second window, pausing deliveries to that endpoint for a cooldown period.",
+    "filesLikelyAffected": [
+      "apps/api/src/modules/alerts/circuit-breaker.ts",
+      "apps/api/src/workers/dispatcher.worker.ts",
+      "apps/api/src/lib/redis.ts"
+    ],
+    "acceptanceCriteria": [
+      "Tracks failure counts per webhook endpoint in Redis with automatic TTL expiration",
+      "Trips endpoint status to OPEN on threshold breach and fast-fails new deliveries without network blocking",
+      "Transitions to HALF-OPEN after cooldown, sending a canary request to test recovery"
+    ],
+    "testingRequirements": [
+      "Unit test state transitions (CLOSED -> OPEN -> HALF-OPEN -> CLOSED)",
+      "Verify BullMQ worker skips network call when circuit is OPEN"
+    ]
+  },
+  {
+    "id": 104,
+    "title": "[SEC]: SEP-0010 Stellar Web Authentication Challenge & Verification API",
+    "category": "Auth",
+    "milestone": "Milestone 2 – Security",
+    "complexity": "High",
+    "estimatedPoints": 200,
+    "labels": ["auth", "security", "stellar", "api", "drips-wave", "points: 200"],
+    "summary": "Implement native Stellar Web Authentication (SEP-0010) allowing users to log in and manage alerts using Ed25519 wallet signatures.",
+    "background": "Stellar ecosystem users prefer authenticating directly with non-custodial wallets (Freighter, Albedo, Lobstr) rather than traditional username/password or Web2 OAuth.",
+    "problemStatement": "Without SEP-0010, wallet owners cannot securely prove ownership of public keys on-chain during API authentication.",
+    "proposedSolution": "Create GET /auth/sep10/challenge and POST /auth/sep10/verify endpoints following the official SEP-0010 specification using @stellar/stellar-sdk Keypair and TransactionBuilder.",
+    "filesLikelyAffected": [
+      "apps/api/src/modules/auth/sep10.service.ts",
+      "apps/api/src/modules/auth/sep10.controller.ts",
+      "apps/api/src/modules/auth/auth.routes.ts"
+    ],
+    "acceptanceCriteria": [
+      "Generates valid SEP-0010 challenge transaction envelopes signed by the server",
+      "Validates client signature against challenge transaction envelope with strict sequence number and time bounds checks",
+      "Issues signed JWT session token upon successful cryptographic verification"
+    ],
+    "testingRequirements": [
+      "Unit test challenge transaction generation and cryptographic signature verification",
+      "Test rejection of expired or tampered challenge transactions"
+    ]
+  },
+  {
+    "id": 105,
+    "title": "[CLI]: Offline Transaction Simulation & Resource Fee Estimation Command",
+    "category": "CLI",
+    "milestone": "Milestone 3 – Reliability",
+    "complexity": "High",
+    "estimatedPoints": 200,
+    "labels": ["dx", "soroban", "stellar", "drips-wave", "points: 200"],
+    "summary": "Add an 'alerts simulate' command to the CLI for pre-broadcast Soroban transaction execution and fee estimation.",
+    "background": "Soroban smart contract transactions require precise CPU instructions and memory limit resource declarations. Submitting transactions with insufficient resource allowances results in failure and fee loss.",
+    "problemStatement": "CLI users and script developers cannot inspect expected contract state transitions, simulated events, or exact resource fees prior to submission.",
+    "proposedSolution": "Implement 'alerts simulate <tx-xdr>' in packages/cli/src/commands/simulate.ts connecting to Soroban RPC simulateTransaction endpoint and rendering a structured output of CPU limits, ledger read/writes, and footprint.",
+    "filesLikelyAffected": [
+      "packages/cli/src/commands/simulate.ts",
+      "packages/cli/src/lib/soroban-rpc.ts",
+      "packages/cli/src/index.ts"
+    ],
+    "acceptanceCriteria": [
+      "Accepts base64 XDR transaction envelope and sends to configured RPC node",
+      "Outputs simulated success/failure status, CPU/RAM usage, and minimum required fee in stroops/XLM",
+      "Displays simulated contract events in human-readable JSON format"
+    ],
+    "testingRequirements": [
+      "Unit test CLI argument parser with mock XDR payloads",
+      "Verify correct exit code and error rendering when simulation fails"
+    ]
+  },
+  {
+    "id": 106,
+    "title": "[NOTIFICATIONS]: Multi-Tenant Discord Webhook Rich Embed Formatter with Dynamic Asset Icons",
+    "category": "Notifications",
+    "milestone": "Milestone 3 – Reliability",
+    "complexity": "High",
+    "estimatedPoints": 200,
+    "labels": ["notifications", "feature", "backend", "drips-wave", "points: 200"],
+    "summary": "Implement native Discord Webhook alert delivery with rich embed cards, color-coded severity, and Stellar asset logos.",
+    "background": "DAO treasuries, validator operators, and trading teams coordinate primarily in Discord channels and require native embed cards for real-time wallet tracking.",
+    "problemStatement": "Raw JSON or plain text webhooks in Discord look unprofessional and lack quick action links, asset badges, and formatted amounts.",
+    "proposedSolution": "Create DiscordNotificationProvider in apps/api/src/modules/notifications/providers/discord.provider.ts constructing Discord-compliant webhook payloads with embed colors, fields (Amount, Asset, From, To, Hash), and clickable Stellar Expert links.",
+    "filesLikelyAffected": [
+      "apps/api/src/modules/notifications/providers/discord.provider.ts",
+      "apps/api/src/modules/notifications/notification.service.ts"
+    ],
+    "acceptanceCriteria": [
+      "Formats incoming payment and contract alert into rich Discord embed payload",
+      "Resolves common asset icons (XLM, USDC, EURC) dynamically",
+      "Executes delivery with exponential backoff and rate-limit retry headers (X-RateLimit-Reset)"
+    ],
+    "testingRequirements": [
+      "Unit test Discord embed JSON schema builder",
+      "Verify handling of Discord 429 rate limit responses"
+    ]
+  },
+  {
+    "id": 107,
+    "title": "[NOTIFICATIONS]: Slack Interactive Block Kit Notification Dispatcher with Alert Acknowledgment",
+    "category": "Notifications",
+    "milestone": "Milestone 3 – Reliability",
+    "complexity": "High",
+    "estimatedPoints": 200,
+    "labels": ["notifications", "feature", "backend", "drips-wave", "points: 200"],
+    "summary": "Build an enterprise Slack Block Kit notification dispatcher supporting interactive action buttons.",
+    "background": "Enterprise ops teams manage alerts inside Slack and need the ability to view transaction details, jump to explorer views, and acknowledge alerts directly within the channel.",
+    "problemStatement": "Basic text messages in Slack get lost in channel noise and provide no interactive response capabilities.",
+    "proposedSolution": "Build SlackNotificationProvider in apps/api/src/modules/notifications/providers/slack.provider.ts generating interactive Block Kit messages with headers, markdown sections, and interactive button accessories.",
+    "filesLikelyAffected": [
+      "apps/api/src/modules/notifications/providers/slack.provider.ts",
+      "apps/api/src/modules/notifications/notification.service.ts"
+    ],
+    "acceptanceCriteria": [
+      "Constructs valid Slack Block Kit payload with section blocks, context elements, and button actions",
+      "Supports custom webhook URLs and Slack Bot token delivery",
+      "Includes deep links to Stellar Expert and Stellar Alerts dashboard"
+    ],
+    "testingRequirements": [
+      "Validate Block Kit payload against official Slack schema",
+      "Unit test message payload generation with mock payment data"
+    ]
+  },
+  {
+    "id": 108,
+    "title": "[QUEUES]: Dead Letter Queue (DLQ) Auto-Replay & Bulk Retry Management Service",
+    "category": "Backend",
+    "milestone": "Milestone 3 – Reliability",
+    "complexity": "High",
+    "estimatedPoints": 200,
+    "labels": ["backend", "queue", "redis", "drips-wave", "points: 200"],
+    "summary": "Build an administrative API and service to inspect, filter, and bulk-replay poisoned or failed alert jobs from the BullMQ Dead Letter Queue.",
+    "background": "When downstream providers or third-party webhooks experience an extended outage, failed jobs end up in the DLQ. Once the provider recovers, operators need a reliable way to replay those jobs without duplicating already processed events.",
+    "problemStatement": "Currently, replaying dead-lettered jobs requires manual database surgery or Redis CLI intervention, risking data inconsistency.",
+    "proposedSolution": "Develop a DlqReplayService in apps/api/src/modules/admin/dlq-replay.service.ts with endpoints GET /admin/dlq, POST /admin/dlq/replay, and POST /admin/dlq/purge with filter parameters (by wallet, destination, or time range).",
+    "filesLikelyAffected": [
+      "apps/api/src/modules/admin/dlq-replay.service.ts",
+      "apps/api/src/modules/admin/dlq.controller.ts",
+      "apps/api/src/lib/queue.ts"
+    ],
+    "acceptanceCriteria": [
+      "Inspects failed BullMQ jobs with error stack traces and original payload metadata",
+      "Re-queues selected failed jobs to the primary alert queue preserving idempotency keys",
+      "Allows selective purging of dead jobs older than a specified retention window"
+    ],
+    "testingRequirements": [
+      "Integration test simulating failed job placement in DLQ and subsequent successful replay",
+      "Verify idempotency deduplication prevents double-firing on replay"
+    ]
+  },
+  {
+    "id": 109,
+    "title": "[SOROBAN]: Token Allowance & Spender Approval Risk Sentinel",
+    "category": "Soroban",
+    "milestone": "Milestone 2 – Security",
+    "complexity": "High",
+    "estimatedPoints": 200,
+    "labels": ["soroban", "security", "backend", "drips-wave", "points: 200"],
+    "summary": "Monitor Soroban token allowance approvals to detect risky or unlimited spender permissions.",
+    "background": "In Soroban and smart contract ecosystems, phishing dApps often request excessive or infinite token allowances (max i128 allowance), putting user wallets at catastrophic risk of future drainage.",
+    "problemStatement": "Users are unaware when a contract is granted permission to spend tokens on their behalf until funds are already drained.",
+    "proposedSolution": "Build an AllowanceSentinel module that detects Soroban 'approve' invocations on tracked wallets, calculates the approved exposure, and dispatches high-priority warning alerts when an allowance exceeds safety thresholds.",
+    "filesLikelyAffected": [
+      "apps/api/src/workers/watcher/allowance-sentinel.ts",
+      "apps/api/src/modules/alerts/rules/allowance.rule.ts"
+    ],
+    "acceptanceCriteria": [
+      "Detects Soroban token approve invocations for monitored wallet public keys",
+      "Identifies unlimited or high-risk allowance amounts (exceeding configurable threshold)",
+      "Dispatches urgent warning notification with spender address and revocation instructions"
+    ],
+    "testingRequirements": [
+      "Unit test decoding of approve invocation parameters from contract call XDR",
+      "Verify trigger on both SAC and custom Soroban token contracts"
+    ]
+  },
+  {
+    "id": 110,
+    "title": "[INGESTION]: Resilient Multi-Node Horizon Failover Matrix with Latency Probing",
+    "category": "Backend",
+    "milestone": "Milestone 3 – Reliability",
+    "complexity": "High",
+    "estimatedPoints": 200,
+    "labels": ["backend", "stellar", "reliability", "drips-wave", "points: 200"],
+    "summary": "Implement an adaptive multi-node Horizon connection pool with health probing and zero-downtime failover.",
+    "background": "Public Horizon RPC endpoints (such as horizon.stellar.org or testnet) frequently experience rate limiting (HTTP 429), temporary desynchronization, or infrastructure maintenance.",
+    "problemStatement": "Relying on a single hardcoded Horizon URL causes ingestion watcher halts whenever the provider node experiences downtime.",
+    "proposedSolution": "Implement a HorizonPool manager in apps/api/src/lib/horizon-pool.ts that rotates requests across primary and fallback RPC nodes (e.g. SDF, Ankr, NowNodes, local validator), continuously tracking latency and ledger sync lag.",
+    "filesLikelyAffected": [
+      "apps/api/src/lib/horizon-pool.ts",
+      "apps/api/src/workers/watcher/node-selector.ts",
+      "apps/api/src/config/env.ts"
+    ],
+    "acceptanceCriteria": [
+      "Maintains priority list of configured Horizon RPC URLs",
+      "Executes background ping and ledger-height check every 30s",
+      "Automatically shifts active SSE stream to next healthy node upon network failure or 429 rate limit"
+    ],
+    "testingRequirements": [
+      "Unit test failover rotation when primary endpoint returns 503 or 429",
+      "Verify cursor continuation without duplicate event emission across node switches"
+    ]
+  },
+  {
+    "id": 111,
+    "title": "[SEC]: Argon2id Key Derivation & AES-256-GCM Vault for CLI Profile Secrets",
+    "category": "Security",
+    "milestone": "Milestone 2 – Security",
+    "complexity": "High",
+    "estimatedPoints": 200,
+    "labels": ["security", "dx", "drips-wave", "points: 200"],
+    "summary": "Upgrade CLI profile credentials storage to memory-hard Argon2id key derivation with AES-256-GCM authentication.",
+    "background": "The CLI profile store securely manages API keys and private configuration profiles across development and production environments.",
+    "problemStatement": "Weak key derivation or plaintext configuration storage exposes sensitive API keys to unauthorized local users and malware inspecting user home directories.",
+    "proposedSolution": "Integrate Argon2id key derivation with 64MB memory cost and 3 iterations, deriving a 256-bit encryption key to encrypt stored vault secrets with AES-256-GCM authenticated cipher.",
+    "filesLikelyAffected": [
+      "packages/cli/src/lib/vault/argon2-vault.ts",
+      "packages/cli/src/lib/profile-store.ts"
+    ],
+    "acceptanceCriteria": [
+      "Derives cryptographic key using Argon2id with salt and memory-hard parameters",
+      "Encrypts and authenticates profile secret store using AES-256-GCM with unique initialization vectors",
+      "Rejects decryption attempts with incorrect password without revealing secret payload"
+    ],
+    "testingRequirements": [
+      "Unit test encryption and decryption roundtrip",
+      "Verify rejection on corrupted ciphertext or authentication tag mismatch"
+    ]
+  },
+  {
+    "id": 112,
+    "title": "[FRONTEND]: Real-Time Soroban Contract Event Stream Visualizer with XDR Inspector",
+    "category": "Frontend",
+    "milestone": "Milestone 3 – Reliability",
+    "complexity": "High",
+    "estimatedPoints": 200,
+    "labels": ["frontend", "soroban", "feature", "drips-wave", "points: 200"],
+    "summary": "Create an interactive real-time Soroban contract event inspector component in the web dashboard.",
+    "background": "Smart contract developers need visibility into live contract events, decoded parameters, and topics as transactions execute on-chain.",
+    "problemStatement": "Current dashboard only displays standard payment records; developers have no visual interface to monitor contract invocations and state changes.",
+    "proposedSolution": "Build SorobanEventInspector.tsx in apps/web/src/components/dashboard/ with real-time SSE stream integration, search by contract ID, and side-by-side view of raw base64 XDR vs formatted JSON.",
+    "filesLikelyAffected": [
+      "apps/web/src/components/dashboard/SorobanEventInspector.tsx",
+      "apps/web/src/app/soroban/page.tsx",
+      "apps/web/src/lib/sse-client.ts"
+    ],
+    "acceptanceCriteria": [
+      "Subscribes to live SSE stream filtered for Soroban events",
+      "Displays event cards with timestamp, contract address, event topic badge, and transaction hash",
+      "Provides expandable modal showing decoded ScVal values and copyable raw XDR"
+    ],
+    "testingRequirements": [
+      "Component test with mock Soroban event payloads using @testing-library/react",
+      "Verify responsive layout and accessibility compliance"
+    ]
+  },
+  {
+    "id": 113,
+    "title": "[ANALYTICS]: Whale Transaction Detector Rule Engine with Rolling Volumetric Baseline",
+    "category": "Backend",
+    "milestone": "Milestone 3 – Reliability",
+    "complexity": "High",
+    "estimatedPoints": 200,
+    "labels": ["backend", "analytics", "feature", "drips-wave", "points: 200"],
+    "summary": "Build an intelligent alert rule that detects anomalous high-volume transactions based on rolling 24h baseline averages.",
+    "background": "Standard threshold rules (e.g. 'amount > 1000') fail to account for varying wallet activity profiles. A 5,000 XLM transaction may be normal for an exchange wallet but highly suspicious for a personal account.",
+    "problemStatement": "Static threshold alerts trigger either too many false positives or miss unusual spike activities.",
+    "proposedSolution": "Develop WhaleDetectorRule in apps/api/src/modules/alerts/rules/whale-detector.ts computing dynamic exponential moving average (EMA) and standard deviation of payment volume over a sliding 24-hour window, firing when a payment exceeds N standard deviations.",
+    "filesLikelyAffected": [
+      "apps/api/src/modules/alerts/rules/whale-detector.ts",
+      "apps/api/src/modules/analytics/rolling-volume.service.ts"
+    ],
+    "acceptanceCriteria": [
+      "Maintains rolling volume metrics in Redis sorted sets per wallet",
+      "Calculates anomaly multiplier against historical baseline",
+      "Triggers alert when payment exceeds configured standard deviation multiplier"
+    ],
+    "testingRequirements": [
+      "Unit test statistical calculation with sample transaction time-series",
+      "Verify edge case handling for brand-new wallets with minimal history"
+    ]
+  },
+  {
+    "id": 114,
+    "title": "[CRYPTO]: Tamper-Evident Merkle Tree Proof Generator for Historical Alert Audit Logs",
+    "category": "Security",
+    "milestone": "Milestone 2 – Security",
+    "complexity": "High",
+    "estimatedPoints": 200,
+    "labels": ["security", "backend", "drips-wave", "points: 200"],
+    "summary": "Implement cryptographic Merkle tree generation over historical alert delivery logs for independent audit verification.",
+    "background": "Regulated financial entities and institutional clients need cryptographic proof that alert delivery records have not been altered or deleted by database administrators.",
+    "problemStatement": "Standard database logs can be modified or purged without cryptographic evidence of tampering.",
+    "proposedSolution": "Develop a MerkleAuditService in packages/shared/src/crypto/merkle.ts computing daily cryptographic Merkle roots over all delivered payment and alert hashes, exposing endpoints to verify inclusion proofs.",
+    "filesLikelyAffected": [
+      "packages/shared/src/crypto/merkle.ts",
+      "apps/api/src/modules/audit/merkle.service.ts",
+      "apps/api/src/modules/audit/audit.controller.ts"
+    ],
+    "acceptanceCriteria": [
+      "Constructs standard binary Merkle tree using SHA-256 over daily alert delivery records",
+      "Generates compact Merkle inclusion proofs (path hashes) for any specific alert ID",
+      "Provides independent verification function verifying proof against root hash"
+    ],
+    "testingRequirements": [
+      "Unit test Merkle tree computation and inclusion proof verification",
+      "Verify proof rejection if record payload or root is tampered with"
+    ]
+  },
+  {
+    "id": 115,
+    "title": "[CLI]: Interactive Terminal UI (TUI) Dashboard for Live Payment Stream Monitoring",
+    "category": "CLI",
+    "milestone": "Milestone 3 – Reliability",
+    "complexity": "High",
+    "estimatedPoints": 200,
+    "labels": ["dx", "feature", "drips-wave", "points: 200"],
+    "summary": "Build an interactive terminal dashboard in the CLI showing incoming live payments, watcher health, and queue metrics.",
+    "background": "DevOps engineers and power users frequently monitor blockchain services from remote servers over SSH without access to a web browser.",
+    "problemStatement": "The current CLI stream command merely outputs raw text lines, lacking structured gauges, search filtering, and live status summaries.",
+    "proposedSolution": "Build a Terminal UI using Ink or Blessed in packages/cli/src/tui/stream-tui.tsx presenting real-time payment feed, transaction volume meters, connection status indicator, and keyboard shortcuts.",
+    "filesLikelyAffected": [
+      "packages/cli/src/tui/stream-tui.tsx",
+      "packages/cli/src/commands/monitor.ts",
+      "packages/cli/src/index.ts"
+    ],
+    "acceptanceCriteria": [
+      "Renders responsive terminal layout with live transaction feed and summary stats",
+      "Handles keyboard shortcuts (q: quit, c: clear, p: pause/resume, /: filter)",
+      "Gracefully handles terminal resize and disconnect events"
+    ],
+    "testingRequirements": [
+      "Unit test TUI state reducer with simulated incoming stream events",
+      "Test clean terminal restoration on process exit"
+    ]
+  },
+  {
+    "id": 116,
+    "title": "[MONITORING]: Prometheus Metrics Exporter for Ingestion Lag & Queue Delivery SLOs",
+    "category": "DevOps",
+    "milestone": "Milestone 3 – Reliability",
+    "complexity": "High",
+    "estimatedPoints": 200,
+    "labels": ["devops", "monitoring", "backend", "drips-wave", "points: 200"],
+    "summary": "Expose a standardized /metrics Prometheus endpoint reporting queue latency, ingestion lag, and delivery success rates.",
+    "background": "Production observability requires standardized metrics collection compatible with Prometheus, Grafana, and Datadog.",
+    "problemStatement": "Operations teams cannot set up automated PagerDuty alerts or track Service Level Objectives (SLOs) without structured time-series metrics.",
+    "proposedSolution": "Implement PrometheusMetricsService using prom-client in apps/api/src/modules/metrics/prometheus.service.ts exposing counters, histograms, and gauges for ledger latency, BullMQ queue depth, and HTTP dispatch duration.",
+    "filesLikelyAffected": [
+      "apps/api/src/modules/metrics/prometheus.service.ts",
+      "apps/api/src/plugins/metrics.ts",
+      "apps/api/src/server.ts"
+    ],
+    "acceptanceCriteria": [
+      "Exposes GET /metrics endpoint protected by optional bearer token in production",
+      "Tracks stellar_alerts_ledger_lag_seconds and stellar_alerts_queue_latency_milliseconds",
+      "Records delivery success/error ratios grouped by provider type (webhook, telegram, email)"
+    ],
+    "testingRequirements": [
+      "Unit test metric registration and Prometheus output format",
+      "Verify metric updates during simulated alert processing"
+    ]
+  },
+  {
+    "id": 117,
+    "title": "[DATABASE]: Automated Range Partitioning & Archival Worker for High-Volume Payment History",
+    "category": "Database",
+    "milestone": "Milestone 3 – Reliability",
+    "complexity": "High",
+    "estimatedPoints": 200,
+    "labels": ["database", "backend", "performance", "drips-wave", "points: 200"],
+    "summary": "Implement PostgreSQL range partitioning or rolling archival worker to maintain query performance as payment tables scale.",
+    "background": "In high-volume blockchain ingestion, the Payment table grows by millions of rows, causing B-tree index bloat and slowing down real-time API queries.",
+    "problemStatement": "Unpartitioned monolithic payment tables degrade database performance and increase backup/vacuum overhead over time.",
+    "proposedSolution": "Implement an automated monthly range partitioning strategy or background archival worker in apps/api/src/workers/archival.worker.ts that migrates records older than 90 days to cold storage tables while keeping primary tables lean.",
+    "filesLikelyAffected": [
+      "apps/api/src/workers/archival.worker.ts",
+      "apps/api/src/modules/maintenance/partition.service.ts",
+      "apps/api/prisma/schema.prisma"
+    ],
+    "acceptanceCriteria": [
+      "Creates monthly partitions automatically or archives old records safely",
+      "Ensures primary query indices remain optimal for recent transactions (<30 days)",
+      "Maintains transactional consistency during data movement"
+    ],
+    "testingRequirements": [
+      "Integration test verifying data migration without data loss",
+      "Test query performance on active vs partitioned/archived records"
+    ]
+  },
+  {
+    "id": 118,
+    "title": "[FRONTEND]: Non-Custodial Web3 Wallet Signature Re-Authentication for Rule Changes",
+    "category": "Frontend",
+    "milestone": "Milestone 2 – Security",
+    "complexity": "High",
+    "estimatedPoints": 200,
+    "labels": ["frontend", "security", "stellar", "drips-wave", "points: 200"],
+    "summary": "Enforce cryptographic signature confirmation via Freighter/Albedo before modifying sensitive alert rules or destination webhooks.",
+    "background": "Critical security settings (such as changing webhook destination URLs or deleting active alerts) should require active confirmation from the wallet private key to protect against session hijacking.",
+    "problemStatement": "If a user's browser session or JWT is compromised, an attacker could silently redirect high-value payment notifications to their own endpoints.",
+    "proposedSolution": "Build WalletAuthModal.tsx and signature validation utility in apps/web/src/lib/wallet/signature-guard.ts prompting the connected Freighter/Albedo wallet to sign a timestamped payload before submitting sensitive mutations.",
+    "filesLikelyAffected": [
+      "apps/web/src/components/auth/WalletAuthModal.tsx",
+      "apps/web/src/lib/wallet/signature-guard.ts",
+      "apps/web/src/components/dashboard/RuleBuilder.tsx"
+    ],
+    "acceptanceCriteria": [
+      "Prompts user to sign confirmation challenge using connected browser wallet",
+      "Submits signature in X-Stellar-Signature header to API",
+      "Rejects sensitive rule modifications if signature is missing or invalid"
+    ],
+    "testingRequirements": [
+      "Component test for signature prompt modal and user rejection flow",
+      "Verify signature verification logic against test keypair"
+    ]
+  },
+  {
+    "id": 119,
+    "title": "[SOROBAN]: Smart Contract Upgrade & Admin State Modification Alert Sentinel",
+    "category": "Soroban",
+    "milestone": "Milestone 2 – Security",
+    "complexity": "High",
+    "estimatedPoints": 200,
+    "labels": ["soroban", "security", "backend", "drips-wave", "points: 200"],
+    "summary": "Detect and alert on smart contract WASM bytecode upgrades and administrator ownership transfers.",
+    "background": "Soroban smart contracts can be upgradeable if configured with an admin key. A sudden contract bytecode upgrade or admin key transfer can signal an impending rugpull or compromised admin key.",
+    "problemStatement": "Contract users and token holders have no automated alert system to warn them when a contract's logic is modified or ownership is transferred.",
+    "proposedSolution": "Implement ContractUpgradeSentinel in apps/api/src/workers/watcher/contract-upgrade-sentinel.ts scanning for contract code updates and ownership change events on tracked Soroban addresses.",
+    "filesLikelyAffected": [
+      "apps/api/src/workers/watcher/contract-upgrade-sentinel.ts",
+      "apps/api/src/modules/alerts/rules/contract-upgrade.rule.ts"
+    ],
+    "acceptanceCriteria": [
+      "Monitors Soroban contract code hash updates in ledger transactions",
+      "Identifies changes to contract admin state data entries",
+      "Dispatches immediate emergency alert with old vs new executable hash details"
+    ],
+    "testingRequirements": [
+      "Unit test detecting contract upgrade XDR transaction envelopes",
+      "Verify alert generation on simulated contract admin transfer"
+    ]
+  },
+  {
+    "id": 120,
+    "title": "[SEC]: Server-Side Request Forgery (SSRF) Filter & Private IP Egress Firewall for Webhooks",
+    "category": "Security",
+    "milestone": "Milestone 2 – Security",
+    "complexity": "High",
+    "estimatedPoints": 200,
+    "labels": ["security", "webhooks", "backend", "drips-wave", "points: 200"],
+    "summary": "Protect internal infrastructure from SSRF by validating webhook URLs and blocking private/internal IP resolutions.",
+    "background": "Allowing users to specify arbitrary webhook destination URLs exposes internal services (e.g. Redis at localhost:6379, Postgres at localhost:5432, cloud metadata services at 169.254.169.254) to Server-Side Request Forgery.",
+    "problemStatement": "Without DNS resolution inspection and IP egress filtering, malicious users can probe internal microservices using the webhook dispatcher.",
+    "proposedSolution": "Build an SsrfFilter in apps/api/src/modules/webhooks/ssrf-filter.ts that resolves target hostnames to IP addresses before dispatch, strictly blocking RFC 1918 private IPs, loopbacks, link-local, and cloud metadata endpoints.",
+    "filesLikelyAffected": [
+      "apps/api/src/modules/webhooks/ssrf-filter.ts",
+      "apps/api/src/modules/webhooks/webhook.validator.ts",
+      "apps/api/src/workers/dispatcher.worker.ts"
+    ],
+    "acceptanceCriteria": [
+      "Resolves DNS before connection and checks IP against CIDR blocklist (127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.169.254)",
+      "Prevents DNS rebinding by pinning validated IP address during HTTP connection",
+      "Rejects invalid URLs with HTTP 400 Bad Request and security audit log"
+    ],
+    "testingRequirements": [
+      "Unit tests verifying rejection of localhost, private IPs, and cloud metadata URLs",
+      "Verify legitimate public HTTPS URLs pass validation seamlessly"
+    ]
+  },
+  {
+    "id": 121,
+    "title": "[CLI]: Add Structured '--json' Output Flag to Wallet and Profile Listing Commands",
+    "category": "CLI",
+    "milestone": "Milestone 1 – Foundation",
+    "complexity": "Trivial",
+    "estimatedPoints": 100,
+    "labels": ["dx", "feature", "good first issue", "drips-wave", "points: 100"],
+    "summary": "Support '--json' flag on CLI commands to allow programmatic piping and shell scripting.",
+    "background": "Currently, 'alerts wallet list' and 'alerts profile list' output human-readable CLI tables. Automation scripts and CI pipelines need structured JSON output.",
+    "problemStatement": "Script authors must write brittle regexes to extract wallet public keys or profile statuses from table text.",
+    "proposedSolution": "Add '--json' option flag to packages/cli/src/commands/wallet.ts and packages/cli/src/commands/profile.ts, printing JSON.stringify(data, null, 2) when the flag is present.",
+    "filesLikelyAffected": [
+      "packages/cli/src/commands/wallet.ts",
+      "packages/cli/src/commands/profile.ts"
+    ],
+    "acceptanceCriteria": [
+      "Supports --json flag on wallet list and profile list commands",
+      "Outputs valid JSON parseable by jq",
+      "Omits table borders and ascii styling when --json is passed"
+    ],
+    "testingRequirements": [
+      "Unit tests verifying JSON string output matches expected schema",
+      "Verify standard table output remains unchanged when flag is omitted"
+    ]
+  },
+  {
+    "id": 122,
+    "title": "[FRONTEND]: Reusable Copy-to-Clipboard Component with Visual Tooltip Feedback",
+    "category": "Frontend",
+    "milestone": "Milestone 1 – Foundation",
+    "complexity": "Trivial",
+    "estimatedPoints": 100,
+    "labels": ["frontend", "ui", "good first issue", "drips-wave", "points: 100"],
+    "summary": "Build an accessible CopyButton component with animated checkmark tooltip for public keys and transaction hashes.",
+    "background": "Users frequently copy 56-character Stellar public keys and 64-character transaction hashes from the dashboard.",
+    "problemStatement": "Currently, users have to manually highlight long strings, leading to truncation mistakes and poor usability.",
+    "proposedSolution": "Build CopyButton.tsx in apps/web/src/components/ui/CopyButton.tsx using navigator.clipboard.writeText with visual feedback (checkmark icon + 'Copied!' tooltip for 2 seconds).",
+    "filesLikelyAffected": [
+      "apps/web/src/components/ui/CopyButton.tsx",
+      "apps/web/src/components/dashboard/PaymentRow.tsx",
+      "apps/web/src/components/dashboard/WalletCard.tsx"
+    ],
+    "acceptanceCriteria": [
+      "Copies provided string to system clipboard on click",
+      "Toggles icon from copy to green checkmark with accessible aria-live announcement",
+      "Reverts state automatically after 2 seconds"
+    ],
+    "testingRequirements": [
+      "Component unit test mocking navigator.clipboard.writeText",
+      "Verify keyboard accessibility (tab focusable and Enter/Space triggers)"
+    ]
+  },
+  {
+    "id": 123,
+    "title": "[DOCS]: Update and Validate Postman Collection with Authentication & Variable Presets",
+    "category": "Docs",
+    "milestone": "Milestone 1 – Foundation",
+    "complexity": "Trivial",
+    "estimatedPoints": 100,
+    "labels": ["documentation", "api", "good first issue", "drips-wave", "points: 100"],
+    "summary": "Synchronize and enrich the repository Postman collection with up-to-date routes, auth headers, and environment presets.",
+    "background": "The repository includes stellar_alerts.postman_collection.json for developer integration testing.",
+    "problemStatement": "Several newly implemented endpoints (e.g. cursor status, webhook management, alerts) are missing or lack parameter documentation in the Postman collection.",
+    "proposedSolution": "Update stellar_alerts.postman_collection.json to reflect all OpenAPI endpoints, include {{baseUrl}} and {{jwtToken}} environment variable placeholders, and add sample request bodies.",
+    "filesLikelyAffected": [
+      "stellar_alerts.postman_collection.json",
+      "docs/LOCAL_SETUP.md"
+    ],
+    "acceptanceCriteria": [
+      "All Fastify API routes have corresponding requests in the Postman collection",
+      "Includes pre-configured Authorization: Bearer {{jwtToken}} headers",
+      "Validates without syntax errors in Postman and Postman CLI (Newman)"
+    ],
+    "testingRequirements": [
+      "Validate JSON schema of collection file",
+      "Verify collection loads cleanly in API client"
+    ]
+  },
+  {
+    "id": 124,
+    "title": "[DEVOPS]: Pre-Commit Git Hook for Automated Secret & Private Key Pattern Scanning",
+    "category": "DevOps",
+    "milestone": "Milestone 1 – Foundation",
+    "complexity": "Trivial",
+    "estimatedPoints": 100,
+    "labels": ["devops", "security", "good first issue", "drips-wave", "points: 100"],
+    "summary": "Add a local pre-commit hook to prevent accidental commits of Stellar private keys (S...) or API secrets.",
+    "background": "Open-source contributors frequently accidentally commit .env files or real Stellar secret keys (S...) into their feature branches.",
+    "problemStatement": "Once committed and pushed, private keys are compromised and require immediate key rotation and git history scrubbing.",
+    "proposedSolution": "Add a lightweight secret scanner script in scripts/scan-staged-secrets.mjs triggered by Husky pre-commit hook that checks staged diffs for Stellar secret key prefixes ('S[A-Z0-9]{55}') and raw private JWT secrets.",
+    "filesLikelyAffected": [
+      ".husky/pre-commit",
+      "scripts/scan-staged-secrets.mjs",
+      "package.json"
+    ],
+    "acceptanceCriteria": [
+      "Inspects git staged diff for known secret regex patterns prior to commit",
+      "Aborts commit with clear remediation instructions if secret pattern is detected",
+      "Allows bypass flag (--no-verify) for intentional synthetic test fixtures"
+    ],
+    "testingRequirements": [
+      "Unit test pattern matcher with valid and invalid key examples",
+      "Verify non-blocking execution (<200ms) on normal code commits"
+    ]
+  },
+  {
+    "id": 125,
+    "title": "[FRONTEND]: Empty State Onboarding Illustration & Quick-Action Card for Zero-Watcher State",
+    "category": "Frontend",
+    "milestone": "Milestone 1 – Foundation",
+    "complexity": "Trivial",
+    "estimatedPoints": 100,
+    "labels": ["frontend", "ui", "good first issue", "drips-wave", "points: 100"],
+    "summary": "Design and implement an engaging empty state card guiding first-time users to add their first Stellar wallet.",
+    "background": "When a new user logs into the dashboard for the first time, the watchers table is blank.",
+    "problemStatement": "An unstyled empty table looks broken and leaves new users unsure of what action to take next.",
+    "proposedSolution": "Create EmptyWatchersState.tsx in apps/web/src/components/dashboard/ displaying a friendly illustration, explanatory text on real-time alerts, and a prominent 'Add Your First Wallet' primary CTA button.",
+    "filesLikelyAffected": [
+      "apps/web/src/components/dashboard/EmptyWatchersState.tsx",
+      "apps/web/src/components/dashboard/DashboardGrid.tsx"
+    ],
+    "acceptanceCriteria": [
+      "Renders cleanly when user has 0 registered wallets",
+      "Displays primary call-to-action button that triggers the Add Wallet modal",
+      "Adheres to glassmorphism dark theme styling and full accessibility attributes"
+    ],
+    "testingRequirements": [
+      "Component test verifying display when wallet list is empty",
+      "Verify component hides once at least one wallet is present"
+    ]
+  }
+]
